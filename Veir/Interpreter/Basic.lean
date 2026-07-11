@@ -10,6 +10,7 @@ import Veir.Data.HW.Basic
 import Veir.Data.Casting
 import Veir.Properties
 import Veir.GlobalOpInfo
+import Veir.Interfaces.FuncOpInterface
 
 open Veir.Data
 /-!
@@ -1710,9 +1711,11 @@ def interpretFunction (op : OperationPtr) (values : Array RuntimeValue) {ctx : W
     Interp (MemoryState × Array RuntimeValue) := do
   if h : op.getNumRegions ctx.raw ≠ 1 then
     none
+  else if FuncOpInterface.isExternal! op ctx.raw then
+    none
   else
     let state : InterpreterState ctx := ⟨.empty ctx, mem⟩
-    let (state, results) ← interpretRegion (op.getRegion ctx.raw 0) values state
+    let (state, results) ← interpretRegion (FuncOpInterface.getFunctionBody op ctx.raw) values state
     return (state.memory, results)
 
 /--
