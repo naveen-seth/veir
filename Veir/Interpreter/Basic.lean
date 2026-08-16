@@ -888,10 +888,17 @@ def Llvm.interpretOp' (opType : Veir.Llvm) (properties : HasOpInfo.propertiesOf 
       return (#[.byte bw (LLVM.Byte.lshr lhs rhs properties.exact)], mem, none)
     | _ => none
   | .ashr => do
-    let [.int bw lhs, .int bw' rhs] := operands.toList | none
-    if h: bw' ≠ bw then none else
-    let rhs := rhs.cast (by simp at h; exact h)
-    return (#[.int bw (LLVM.Int.ashr lhs rhs properties.exact)], mem, none)
+    let [lhs, .int bw' rhs] := operands.toList | none
+    match lhs with
+    | .int bw lhs =>
+      if h: bw' ≠ bw then none else
+      let rhs := rhs.cast (by simp at h; exact h)
+      return (#[.int bw (LLVM.Int.ashr lhs rhs properties.exact)], mem, none)
+    | .byte bw lhs =>
+      if h: bw' ≠ bw then none else
+      let rhs := rhs.cast (by simp at h; exact h)
+      return (#[.byte bw (LLVM.Byte.ashr lhs rhs properties.exact)], mem, none)
+    | _ => none
   | .intr__fshl => do
     let [.int bw a, .int bw' b, .int bw'' c] := operands.toList | none
     if h: bw' ≠ bw then none else

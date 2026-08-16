@@ -86,6 +86,20 @@ def lshr (x : Byte w) (y : Int w) (exact := false) : Byte w :=
       simp [←BitVec.ushiftRight_and_distrib, x.h]
     )⟩
 
+@[veir_bv_normalize]
+def ashr (x : Byte w) (y : Int w) (exact := false) : Byte w :=
+  let y' := y.getValueD
+  if y.isPoison || y'.toNat ≥ w then
+    allPoison
+  else if exact ∧ (x.val.sshiftRight' y') <<< y' ≠ x.val then
+    allPoison
+  else if exact ∧ (x.poison.sshiftRight' y') <<< y' ≠ x.poison then
+    allPoison
+  else
+    ⟨x.val.sshiftRight' y', x.poison.sshiftRight' y', by (
+      simp [←BitVec.sshiftRight_and_distrib, x.h]
+    )⟩
+
 def freeze (x : Byte w) : Byte w :=
   ⟨x.val, 0#w, by grind⟩
 

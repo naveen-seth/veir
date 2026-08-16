@@ -432,6 +432,11 @@ theorem OperationPtr.Verified.llvm_lshr {op : OperationPtr} {opInBounds}
     op.IsVerifiedLLVMShift ctx := OperationPtr.Verified.llvmShift opVerify <| by
     simp only [verifyLocalInvariants, Llvm.verifyLocalInvariants, ← getOpType!_eq_getOpType, opType]
 
+theorem OperationPtr.Verified.llvm_ashr {op : OperationPtr} {opInBounds}
+    (opVerify : op.Verified ctx opInBounds) (opType : op.getOpType! ctx.raw = .llvm .ashr) :
+    op.IsVerifiedLLVMShift ctx := OperationPtr.Verified.llvmShift opVerify <| by
+    simp only [verifyLocalInvariants, Llvm.verifyLocalInvariants, ← getOpType!_eq_getOpType, opType]
+
 theorem OperationPtr.Verified.arith_addi {op : OperationPtr} {opInBounds}
     (opVerify : op.Verified ctx opInBounds) (opType : op.getOpType! ctx.raw = .arith .addi) :
     op.IsVerifiedIntegerBinop ctx := OperationPtr.Verified.integerBinop opVerify <| by
@@ -809,11 +814,6 @@ theorem OperationPtr.Verified.llvm_add {op : OperationPtr} {opInBounds}
 
 theorem OperationPtr.Verified.llvm_sub {op : OperationPtr} {opInBounds}
     (opVerify : op.Verified ctx opInBounds) (opType : op.getOpType! ctx.raw = .llvm .sub) :
-    op.IsVerifiedIntegerBinop ctx := OperationPtr.Verified.integerBinop opVerify <| by
-    simp only [verifyLocalInvariants, Llvm.verifyLocalInvariants, ← getOpType!_eq_getOpType, opType]
-
-theorem OperationPtr.Verified.llvm_ashr {op : OperationPtr} {opInBounds}
-    (opVerify : op.Verified ctx opInBounds) (opType : op.getOpType! ctx.raw = .llvm .ashr) :
     op.IsVerifiedIntegerBinop ctx := OperationPtr.Verified.integerBinop opVerify <| by
     simp only [verifyLocalInvariants, Llvm.verifyLocalInvariants, ← getOpType!_eq_getOpType, opType]
 

@@ -523,13 +523,13 @@ def Llvm.verifyLocalInvariants {OpInfo : Type} [HasOpInfo OpInfo]
       | throw "Expected result to have !llvm.ptr type"
     pure ()
   | .and | .or | .xor | .intr__smax | .intr__smin
-  | .intr__umax | .intr__umin | .add | .sub | .ashr | .mul | .sdiv | .udiv
+  | .intr__umax | .intr__umin | .add | .sub | .mul | .sdiv | .udiv
   | .srem | .urem | .intr__sadd__sat | .intr__uadd__sat
   | .intr__ssub__sat | .intr__usub__sat | .intr__sshl__sat | .intr__ushl__sat => do
     op.checkIsNonNullIntegerType ctx opIn
     op.verifyIntegerBinop ctx opIn
     pure ()
-  | .lshr | .shl => do
+  | .lshr | .shl | .ashr => do
     op.checkIsNonNullIntegerType ctx opIn
     op.verifyLLVMShift ctx opIn
     pure ()
