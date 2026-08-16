@@ -1,3 +1,4 @@
+// TODO: Use MLIR-ROUNDTRIP once upstream supports shift operations on llvm.byte.
 // RUN: veir-opt %s | filecheck %s
 
 // Check that the shift amount may either be of the same type as the result, or a llvm.byte of the
