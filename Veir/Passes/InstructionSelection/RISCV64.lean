@@ -400,6 +400,21 @@ def constant (rewriter : PatternRewriter OpCode) (op : OperationPtr)
     (opInBounds : op.InBounds rewriter.ctx.raw) : Option (PatternRewriter OpCode) :=
   RewritePattern.fromLocalRewrite constant_local rewriter op opInBounds
 
+def matchGAdd (op : OperationPtr) (ctx : IRContext OpCode) :
+    Option (ValuePtr × ValuePtr × NswNuwProperties) := do
+  let (op, properties) ← matchOp op ctx (GMIR.g_add) 2
+  return (op[0]!, op[1]!, properties)
+
+/-- gmir.g_add -> riscv.add (riscv.addw for i32, keeps the result sign-extended) -/
+def g_add_local (ctx : WfIRContext OpCode) (op : OperationPtr) :
+    Option (WfIRContext OpCode × Option (Array OperationPtr × Array ValuePtr)) :=
+  lowerBinaryWLocal matchGAdd .add .addw () () ctx op
+
+/-- gmir.g_add -> riscv.add -/
+def g_add (rewriter : PatternRewriter OpCode) (op : OperationPtr)
+    (opInBounds : op.InBounds rewriter.ctx.raw) : Option (PatternRewriter OpCode) :=
+  RewritePattern.fromLocalRewrite g_add_local rewriter op opInBounds
+
 /-- llvm.add -> riscv.add (riscv.addw for i32, keeps the result sign-extended) -/
 def add_local (ctx : WfIRContext OpCode) (op : OperationPtr) :
     Option (WfIRContext OpCode × Option (Array OperationPtr × Array ValuePtr)) :=
@@ -703,6 +718,21 @@ def urem_local (ctx : WfIRContext OpCode) (op : OperationPtr) :
 def urem (rewriter : PatternRewriter OpCode) (op : OperationPtr)
     (opInBounds : op.InBounds rewriter.ctx.raw) : Option (PatternRewriter OpCode) :=
   RewritePattern.fromLocalRewrite urem_local rewriter op opInBounds
+
+def matchGSub (op : OperationPtr) (ctx : IRContext OpCode) :
+    Option (ValuePtr × ValuePtr × NswNuwProperties) := do
+  let (op, properties) ← matchOp op ctx (GMIR.g_sub) 2
+  return (op[0]!, op[1]!, properties)
+
+/-- gmir.g_sub -> riscv.sub (riscv.subw for i32) -/
+def g_sub_local (ctx : WfIRContext OpCode) (op : OperationPtr) :
+    Option (WfIRContext OpCode × Option (Array OperationPtr × Array ValuePtr)) :=
+  lowerBinaryWLocal matchGSub .sub .subw () () ctx op
+
+/-- gmir.g_sub -> riscv.sub -/
+def g_sub (rewriter : PatternRewriter OpCode) (op : OperationPtr)
+    (opInBounds : op.InBounds rewriter.ctx.raw) : Option (PatternRewriter OpCode) :=
+  RewritePattern.fromLocalRewrite g_sub_local rewriter op opInBounds
 
 /-- llvm.sub -> riscv.sub (riscv.subw for i32) -/
 def sub_local (ctx : WfIRContext OpCode) (op : OperationPtr) :
@@ -1676,8 +1706,8 @@ def ISelPass.impl (ctx : WfIRContext OpCode) (op : OperationPtr) (_ : op.InBound
   | some ctx => pure ctx
   /- Main loop: the existing per-op lowerings. -/
   let pattern := RewritePattern.GreedyRewritePattern #[selectCzeroeqz, selectCzeronez, selectGeneral,
-    ctlz, cttz, ctpop, bswap, bitreverse, constant, add, and, ashr, icmp, or, xor, mul,
-    sdiv, udiv, srem, urem, sext, zext, trunc, shl, lshr, sub, bitcast, load, getelementptr, store,
+    ctlz, cttz, ctpop, bswap, bitreverse, constant, add, g_add, and, ashr, icmp, or, xor, mul,
+    sdiv, udiv, srem, urem, sext, zext, trunc, shl, lshr, sub, g_sub, bitcast, load, getelementptr, store,
     smax, smin, umax, umin, saddSat, ssubSat, uaddSat, usubSat, sshlSat, ushlSat, abs,
     fshlConst, fshrConst, fshl, fshr, fshlGeneral, fshrGeneral, poisonConst, freeze]
   match RewritePattern.applyInContext pattern ctx with
