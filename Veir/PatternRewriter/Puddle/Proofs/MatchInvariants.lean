@@ -462,6 +462,19 @@ theorem Assignment.Rooted.runDecl
     rw [Option.bind_eq_some_iff] at hmatch
     obtain ⟨_, _, htype⟩ := hmatch
     exact h.bindType htype
+  | operands opHandle results =>
+    simp [MatchDecl.run] at hmatch
+    simp only [Option.bind_eq_some_iff] at hmatch
+    obtain ⟨op, hget, _, _, hmatch⟩ := hmatch
+    have hopConsumer := h.1 opHandle op hget
+    have hopPure : op.Pure ctx.raw := by sorry
+    exact h.bindValues hopConsumer hopPure
+      (by intro v hv; simpa using hv) hmatch
+  | resultTypes opHandle results =>
+    simp [MatchDecl.run] at hmatch
+    simp only [Option.bind_eq_some_iff] at hmatch
+    obtain ⟨_, _, _, _, hmatch⟩ := hmatch
+    exact h.bindTypes hmatch
 
 theorem Assignment.Extends.runDecl
     {assignment assignment' : Assignment OpCode} {ctx : IRContext OpCode}
@@ -502,6 +515,16 @@ theorem Assignment.Extends.runDecl
     rw [Option.bind_eq_some_iff] at hmatch
     obtain ⟨_, _, htype⟩ := hmatch
     exact .bindType htype
+  | operands opHandle results =>
+    simp [MatchDecl.run] at hmatch
+    simp only [Option.bind_eq_some_iff] at hmatch
+    obtain ⟨_, hget, _, hsize, hmatch⟩ := hmatch
+    exact .bindValues hmatch
+  | resultTypes opHandle results =>
+    simp [MatchDecl.run] at hmatch
+    simp only [Option.bind_eq_some_iff] at hmatch
+    obtain ⟨_, _, _, _, hmatch⟩ := hmatch
+    exact .bindTypes hmatch
 
 @[expose]
 def MatchDecl.Occurred (decl : MatchDecl OpCode) (ctx : IRContext OpCode)
@@ -587,6 +610,8 @@ theorem MatchProg.root_mem_of_root?_eq_some
       | type _ _ => simp_all
       | guard _ _ => simp_all
       | operation _ _ _ _ _ _ => simp_all
+      | operands _ _ => simp_all
+      | resultTypes _ _ => simp_all
   exact aux prog.decls hroot
 
 theorem Assignment.bindValue_get
@@ -617,6 +642,8 @@ theorem MatchProg.supported_root_of_run
   | value _ _ => simp [MatchDecl.SupportsRoot] at hsupportsRoot
   | type _ _ => simp [MatchDecl.SupportsRoot] at hsupportsRoot
   | guard _ _ => simp [MatchDecl.SupportsRoot] at hsupportsRoot
+  | operands _ _ => simp [MatchDecl.SupportsRoot] at hsupportsRoot
+  | resultTypes _ _ => simp [MatchDecl.SupportsRoot] at hsupportsRoot
   | operation opCode operands resultTypes property propertyHandle opHandle results =>
     simp only [MatchDecl.SupportsRoot] at hsupportsRoot
     obtain ⟨rfl, hterminator⟩ := hsupportsRoot

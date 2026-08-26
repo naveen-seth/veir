@@ -38,9 +38,9 @@ def PropertyMatcher.Supported {opCode : OpCode} (property : PropertyMatcher opCo
 @[expose]
 def MatchDecl.Supported (decl : MatchDecl OpCode) : Prop :=
   match decl with
-  | .operation _opCode operands resultTypes property _ _ results =>
-    property.Supported operands.size resultTypes.size ∧
-      (results.size = resultTypes.size ∨ results = #[])
+  | .operation _opCode ops retTypes property _ _ results =>
+    property.Supported ops.size retTypes.size ∧
+      (results.size = retTypes.size ∨ results = #[])
   | _ => True
 
 
@@ -264,8 +264,8 @@ def MatchDecl.denote (decl : MatchDecl OpCode) (assignment : SemanticAssignment)
     | none => False
   | .operation _opCode operandHandles returnTypeHandles property propertyHandle handle resultHandles =>
     match assignment.getValues operandHandles, assignment.getTypes returnTypeHandles with
-    | some operands, some resultTypes =>
-      property.denote resultTypes operands fun actualProperty results =>
+    | some ops, some retTypes =>
+      property.denote retTypes ops fun actualProperty results =>
         next (((assignment.bindProperty propertyHandle actualProperty).bindOp handle results).bindValues
           resultHandles.toList results.toList)
     | _, _ => False
@@ -273,6 +273,8 @@ def MatchDecl.denote (decl : MatchDecl OpCode) (assignment : SemanticAssignment)
     match MetadataTuple.resolve (self := inputBundle) assignment inputs with
     | some values => predicate values = true → next assignment
     | none => False
+  | .operands _ _ => next assignment
+  | .resultTypes _ _ => next assignment
 
 @[expose]
 def MatchProg.denoteDecls (decls : List (MatchDecl OpCode))
@@ -327,6 +329,10 @@ def MatchDecl.Models (decl : MatchDecl OpCode) (assignment : SemanticAssignment)
     ∃ values,
       MetadataTuple.resolve (self := inputBundle) assignment inputs = some values ∧
       predicate values = true
+  | .operands opHandle results =>
+    ∃ op, assignment.getOp opHandle = some op ∧ assignment.getValues results = some op
+  | .resultTypes opHandle _ =>
+    (assignment.getOp opHandle).isSome
 
 /-- Whether an operation declaration is the supported constraint paired with a root handle. -/
 @[expose]

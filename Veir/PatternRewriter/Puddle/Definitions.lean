@@ -214,6 +214,8 @@ and bind the discovered entities to their corresponding handles. -/
 /-- Bind `result` to the candidate root operation. `MatchProg.Builder` emits a companion `operation`
 declaration that constrains the root after this declaration seeds the assignment. -/
 | root (result : Handle OpInfo .op)
+| operands (op : Handle OpInfo .op) (results : Array (Handle OpInfo .value))
+| resultTypes (op : Handle OpInfo .op) (results : Array (Handle OpInfo .type))
 
 /--
 A match program together with the value exported by its builder. Exports typically contain handles

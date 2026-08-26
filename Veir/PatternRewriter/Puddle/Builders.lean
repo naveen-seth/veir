@@ -59,6 +59,8 @@ structure OpHandle (opCode : OpCode) where
 
 /-- Handles exported by a matched root without exposing the root's SSA results. -/
 structure RootHandle (opCode : OpCode) where
+  /-- The matched root operation handle. -/
+  op : Handle OpCode .op
   /-- The matched root's concrete properties. -/
   properties : Handle OpCode (.prop opCode)
 
@@ -155,10 +157,32 @@ def MatchProg.root (opCode : OpCode) (operands : Array (Handle OpCode .value))
     let results := (Array.range resultTypes.size).map fun index =>
       Handle.mk (OpInfo := OpCode) (state.nextId + index + 1)
     let properties := Handle.mk (OpInfo := OpCode) (state.nextId + resultTypes.size + 1)
-    (⟨properties⟩, {
+    (⟨op, properties⟩, {
       nextId := state.nextId + resultTypes.size + 2
       decls := .root op ::
         .operation opCode operands resultTypes property properties op results :: state.decls
+    })⟩
+
+@[expose, inline]
+def MatchProg.operands (op : Handle OpCode .op) (n : Nat) :
+    MatchProg.Builder (Array (Handle OpCode .value)) :=
+  ⟨fun state =>
+    let handles := (Array.range n).map fun i =>
+      Handle.mk (OpInfo := OpCode) (state.nextId + i)
+    (handles, {
+      nextId := state.nextId + n
+      decls := .operands op handles :: state.decls
+    })⟩
+
+@[expose, inline]
+def MatchProg.resultTypes (op : Handle OpCode .op) (n : Nat) :
+    MatchProg.Builder (Array (Handle OpCode .type)) :=
+  ⟨fun state =>
+    let handles := (Array.range n).map fun i =>
+      Handle.mk (OpInfo := OpCode) (state.nextId + i)
+    (handles, {
+      nextId := state.nextId + n
+      decls := .resultTypes op handles :: state.decls
     })⟩
 
 /-- Build a match program using `MatchProg.Builder`. -/

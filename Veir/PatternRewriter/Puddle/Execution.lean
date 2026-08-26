@@ -229,7 +229,7 @@ def MatchDecl.run (decl : MatchDecl OpInfo) (ctx : IRContext OpInfo)
   | .root opHandle =>
     /- A root instruction only binds the root operation to the given handle. -/
     Assignment.bindOp assignment opHandle root
-  | .operation opCode operands resultTypes property propertyHandle opHandle results =>
+  | .operation opCode operandHandles resultTypeHandles property propertyHandle opHandle results =>
     /- First, find the matched operation through its handle or one of its result handles. -/
     let matchedOp ← Assignment.findOp assignment opHandle results
     /- Then, bind the operation and result handles. -/
@@ -244,13 +244,13 @@ def MatchDecl.run (decl : MatchDecl OpInfo) (ctx : IRContext OpInfo)
     let assignment ← Assignment.bindProperty assignment propertyHandle actualProperties
     let actualResultTypes := matchedOp.getResultTypes! ctx
     /- Check that the result types are valid and bind them. -/
-    _root_.guard (actualResultTypes.size = resultTypes.size)
+    _root_.guard (actualResultTypes.size = resultTypeHandles.size)
     let assignment ← Assignment.bindTypes assignment
-      resultTypes.toList actualResultTypes.toList
+      resultTypeHandles.toList actualResultTypes.toList
     /- Check that the operands are valid and bind them. -/
     let actualOperands := matchedOp.getOperands! ctx
-    _root_.guard (actualOperands.size = operands.size)
-    Assignment.bindValues assignment operands.toList actualOperands.toList
+    _root_.guard (actualOperands.size = operandHandles.size)
+    Assignment.bindValues assignment operandHandles.toList actualOperands.toList
   | .value typeHandle valueHandle =>
     /- Get the value from the assignment (as it should already be bound), and bind its type. -/
     let value ← Assignment.getValue assignment valueHandle
@@ -268,6 +268,16 @@ def MatchDecl.run (decl : MatchDecl OpInfo) (ctx : IRContext OpInfo)
       inferInstance assignment inputs
     _root_.guard (predicate values)
     return assignment
+  | .operands opHandle results =>
+    let op ← Assignment.getOp assignment opHandle
+    let actualOperands := op.getOperands! ctx
+    _root_.guard (actualOperands.size = results.size)
+    Assignment.bindValues assignment results.toList actualOperands.toList
+  | .resultTypes opHandle results =>
+    let op ← Assignment.getOp assignment opHandle
+    let actualResultTypes := op.getResultTypes! ctx
+    _root_.guard (actualResultTypes.size = results.size)
+    Assignment.bindTypes assignment results.toList actualResultTypes.toList
 
 /--
 Interpret a list of declarative match instructions, returning `none` if any match fails, or an

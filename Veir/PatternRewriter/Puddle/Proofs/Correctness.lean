@@ -552,6 +552,9 @@ private theorem MatchProg.models_of_run
       refine ⟨operation.getSuccessors! ctx.raw, state.memory, operationCf, ?_⟩
       subst memory
       simpa [OperationPtr.interpret] using hinterpret
+  | operands opHandle results => sorry
+  | resultTypes opHandle results => sorry
+
 
 private theorem Array.eq_pair_of_size_eq_two {values : Array α} (h : values.size = 2) :
     ∃ first second, values = #[first, second] := by
@@ -2480,6 +2483,8 @@ theorem Pattern.Valid.preservesSemantics
             | value _ _ => simp [MatchDecl.SupportsRoot] at hrootDeclSupported
             | type _ _ => simp [MatchDecl.SupportsRoot] at hrootDeclSupported
             | guard _ _ => simp [MatchDecl.SupportsRoot] at hrootDeclSupported
+            | operands _ _ => simp [MatchDecl.SupportsRoot] at hrootDeclSupported
+            | resultTypes _ _ => simp [MatchDecl.SupportsRoot] at hrootDeclSupported
             | operation rootOpCode rootOperands rootReturnTypes rootProperty
                 rootPropertyHandle opHandle results =>
               simp only [MatchDecl.SupportsRoot] at hrootDeclSupported
