@@ -26,7 +26,7 @@ def GMIR.fromAttrDict
     Except String (GMIR.propertiesOf op) := by
   cases op
   case g_add | g_sub => exact NswNuwProperties.fromAttrDict attrDict
-  case g_icmp => exact IcmpProperties.fromAttrDict attrDict
+  case g_icmp => exact IcmpProperties.fromAttrDictFor "gmir.g_icmp" attrDict
 
 def GMIR.toAttrDict
     (op : GMIR) (props : GMIR.propertiesOf op) :
@@ -78,6 +78,10 @@ def GMIR.genericOpInfo : GMIR → GenericOpInfo
     { outOperandList := #[.type 0]
       inOperandList := #[.type 1, .type 1] }
 
+/--
+Verify the local invariants of a `gmir` operation in any operation-info type
+containing the `gmir` dialect.
+-/
 def GMIR.verifyLocalInvariants {OpInfo : Type} [IsOpCode OpInfo]
     [HasDialect OpInfo GMIR] (op : GMIR) (opPtr : OperationPtr)
     (ctx : WfIRContext OpInfo) (opIn : opPtr.InBounds ctx.raw) :
