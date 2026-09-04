@@ -78,7 +78,6 @@ def GMIR.genericOpInfo : GMIR → GenericOpInfo
     { outOperandList := #[.type 0]
       inOperandList := #[.type 1, .type 1] }
 
--- Mirrors upstreams `MachineVerifier::verifyPreISelGenericInstruction`.
 def GMIR.verifyLocalInvariants {OpInfo : Type} [IsOpCode OpInfo]
     [HasDialect OpInfo GMIR] (op : GMIR) (opPtr : OperationPtr)
     (ctx : WfIRContext OpInfo) (opIn : opPtr.InBounds ctx.raw) :

@@ -18,13 +18,14 @@ namespace Veir
   This lowering differs from the upstream implementation in the following ways:
   - Upstream converts all poison values to undef values; we only have poison but no undef.
   - Some informations represented as operation properties (e.g. the icmp condition code) are
-    represented as special operands in upstream gMIR.
+    represented as special operands in upstream gMIR. This includes all operands with type `immediate`
+    or `unknown` in upstream's llvm/include/llvm/Target/GenericOpcodes.td.
 -/
 
 /-! ## Lowering Patterns -/
 
 /--
-  gMIR 1:1 lowerings with Puddle for binary operations.
+  GMIR lowerings with Puddle for binary operations.
 -/
 def lowerBinop (lOp : Llvm) (gOp : GMIR)
     (h : propertiesOf (OpCode.llvm lOp) = propertiesOf (OpCode.gmir gOp) := by rfl) :
