@@ -154,6 +154,17 @@ structure TbaaTagAttr where
 deriving Inhabited, Repr, DecidableEq, Hashable
 
 /--
+  LLVM memory effects attribute, e.g.
+  `#llvm.memory_effects<other = none, argMem = read, inaccessibleMem = none>`:
+  what a function may do to each class of memory location.
+
+  The body is kept as a string until VeIR reasons about the effects.
+-/
+structure MemoryEffectsAttr where
+  value : String
+deriving Inhabited, Repr, DecidableEq, Hashable
+
+/--
   LLVM target features attribute, e.g. `#llvm.target_features<["+cmov", "+sse"]>`.
 -/
 structure TargetFeaturesAttr where
@@ -438,6 +449,17 @@ deriving Inhabited, Repr, DecidableEq, Hashable
 
 end HW
 
+namespace Seq
+
+/--
+  The `!seq.clock` type from CIRCT's seq dialect.
+  This represents a clock.
+-/
+structure ClockType
+deriving Inhabited, Repr, DecidableEq, Hashable
+
+end Seq
+
 mutual
 
 /--
@@ -579,6 +601,8 @@ inductive Attribute
 | tbaaTagAttr (attr : TbaaTagAttr)
 /-- LLVM constant range attribute -/
 | constantRangeAttr (attr : ConstantRangeAttr)
+/-- LLVM memory effects attribute -/
+| memoryEffectsAttr (attr : MemoryEffectsAttr)
 /-- LLVM target features attribute -/
 | targetFeaturesAttr (attr : TargetFeaturesAttr)
 /-- DLTI data layout spec attribute -/
@@ -653,6 +677,8 @@ inductive Attribute
 | pdlTypeType (type : PDL.TypeType)
 /-- Match optional handle type -/
 | matchOptionalType (type : Match.OptionalType)
+/-- CIRCT seq clock type -/
+| seqClockType (type : Seq.ClockType)
 deriving Inhabited, Repr, Hashable
 
 end
@@ -899,6 +925,10 @@ def Attribute.decEq (attr1 attr2 : Attribute) : Decidable (attr1 = attr2) := by
     exact (match decEq attr1 attr2 with
       | isTrue hEq => isTrue (by grind)
       | isFalse hEq => isFalse (by grind))
+  case memoryEffectsAttr.memoryEffectsAttr attr1 attr2 =>
+    exact (match decEq attr1 attr2 with
+      | isTrue hEq => isTrue (by grind)
+      | isFalse hEq => isFalse (by grind))
   case moduleFlagAttr.moduleFlagAttr attr1 attr2 =>
     exact (match decEq attr1 attr2 with
       | isTrue hEq => isTrue (by grind)
@@ -1043,6 +1073,8 @@ def Attribute.decEq (attr1 attr2 : Attribute) : Decidable (attr1 = attr2) := by
     exact (isTrue (by grind))
   case pdlTypeType.pdlTypeType type1 type2 =>
     exact (isTrue (by grind))
+  case seqClockType.seqClockType =>
+    exact (isTrue (by grind))
   all_goals exact isFalse (by grind)
 termination_by sizeOf attr1
 end
@@ -1117,6 +1149,9 @@ instance : ToString ConstantRangeAttr where
 
 instance : ToString TbaaTagAttr where
   toString attr := s!"#llvm.tbaa_tag<{attr.value}>"
+
+instance : ToString MemoryEffectsAttr where
+  toString attr := s!"#llvm.memory_effects<{attr.value}>"
 
 instance : ToString TargetFeaturesAttr where
   toString attr := s!"#llvm.target_features<{attr.value}>"
@@ -1256,6 +1291,10 @@ instance : ToString HW.ModuleType where
   toString attr :=
     let values := attr.ports.iter.map ToString.toString |>.intercalateString ", "
     s!"!hw.modty<{values}>"
+
+instance : ToString Seq.ClockType where
+  toString _ :=
+    s!"!seq.clock"
 
 mutual
 
@@ -1402,6 +1441,7 @@ def Attribute.toString (attr : Attribute) : String :=
   | .moduleFlagAttr attr => ToString.toString attr
   | .tbaaTagAttr attr => ToString.toString attr
   | .constantRangeAttr attr => ToString.toString attr
+  | .memoryEffectsAttr attr => ToString.toString attr
   | .targetFeaturesAttr attr => ToString.toString attr
   | .dlSpecAttr attr => ToString.toString attr
   | .integerAttr attr => ToString.toString attr
@@ -1440,6 +1480,7 @@ def Attribute.toString (attr : Attribute) : String :=
   | .pdlValueType type => ToString.toString type
   | .pdlTypeType type => ToString.toString type
   | .matchOptionalType type => type.toString
+  | .seqClockType type => ToString.toString type
 termination_by sizeOf attr
 
 end
@@ -1674,6 +1715,7 @@ def isType (attr : Attribute) : Bool :=
   | .moduleFlagAttr _ => false
   | .tbaaTagAttr _ => false
   | .constantRangeAttr _ => false
+  | .memoryEffectsAttr _ => false
   | .targetFeaturesAttr _ => false
   | .dlSpecAttr _ => false
   | .integerAttr _ => false
@@ -1712,6 +1754,7 @@ def isType (attr : Attribute) : Bool :=
   | .pdlValueType _ => true
   | .pdlTypeType _ => true
   | .matchOptionalType _ => true
+  | .seqClockType _ => true
 
 /--
   Returns the size, in bits, that an LLVM type would use if stored to memory.
@@ -1767,6 +1810,8 @@ theorem isType_tbaaTag attr : (tbaaTagAttr attr).isType = false := by rfl
 @[simp, grind =]
 theorem isType_constantRange attr : (constantRangeAttr attr).isType = false := by rfl
 @[simp, grind =]
+theorem isType_memoryEffects attr : (memoryEffectsAttr attr).isType = false := by rfl
+@[simp, grind =]
 theorem isType_targetFeatures attr : (targetFeaturesAttr attr).isType = false := by rfl
 @[simp, grind =]
 theorem isType_dlSpec attr : (dlSpecAttr attr).isType = false := by rfl
@@ -1817,6 +1862,8 @@ theorem isType_pdlOperationType type : (pdlOperationType type).isType = true := 
 theorem isType_pdlValueType type : (pdlValueType type).isType = true := by rfl
 @[simp, grind =]
 theorem isType_pdlTypeType type : (pdlTypeType type).isType = true := by rfl
+@[simp, grind =]
+theorem isType_seqClockType type : (seqClockType type).isType = true := by rfl
 
 end Attribute
 
@@ -2075,6 +2122,10 @@ instance : IsTypeAttr TypeAttr where
   project_eq_some_iff _ _ := by
     simp only [Option.dite_none_right_eq_some, Option.some.injEq, TypeAttr.inj]
     grind
+
+instance : IsTypeAttr Seq.ClockType where
+  coe type := Attribute.asType (.seqClockType type) (by rfl)
+  coe_eq_inject _ := by rfl
 
 end
 end Veir

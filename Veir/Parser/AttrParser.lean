@@ -456,6 +456,7 @@ private def verbatimBodyAttrs : List (ByteArray × (String → Attribute)) :=
     ("llvm.mlir.module_flag".toByteArray, fun body => (ModuleFlagAttr.mk body : Attribute)),
     ("llvm.constant_range".toByteArray, fun body => (ConstantRangeAttr.mk body : Attribute)),
     ("llvm.tbaa_tag".toByteArray, fun body => (TbaaTagAttr.mk body : Attribute)),
+    ("llvm.memory_effects".toByteArray, fun body => (MemoryEffectsAttr.mk body : Attribute)),
     ("llvm.target_features".toByteArray, fun body => (TargetFeaturesAttr.mk body : Attribute)),
     ("dlti.dl_spec".toByteArray, fun body => (DlSpecAttr.mk body : Attribute)) ]
 
@@ -860,6 +861,19 @@ def parseOptionalHWModuleType : AttrParserM (Option HW.ModuleType) := do
   let ports ← parseDelimitedList .angle parseHWModulePort
   return some { ports }
 
+/--
+  Parse CIRCT's `seq` dialect's `ClockType` type.
+  Its syntax is `!seq.clock` (no parameters).
+-/
+def parseOptionalSeqClockType : AttrParserM (Option Seq.ClockType) := do
+  let token ← peekToken
+  let .exclamationIdent := token.kind | return none
+  let input := (← getThe ParserState).input
+  let typeName := { token.slice with start := token.slice.start + 1 }.of input
+  if typeName ≠ "seq.clock".toByteArray then return none
+  let _ ← consumeToken
+  return some {}
+
 /-- A parsed entry in an LLVM function type's parameter list. -/
 inductive LLVMFuncParam
   | type (ty : TypeAttr)
@@ -1128,6 +1142,8 @@ partial def parseOptionalType : AttrParserM (Option TypeAttr) := do
     return some ioAddressType
   if let some hwModuleType ← parseOptionalHWModuleType then
     return some hwModuleType
+  if let some seqClockType ← parseOptionalSeqClockType then
+    return some seqClockType
   if let some pdlRangeType ← parseOptionalPDLRangeType then
     return some pdlRangeType
   if let some pdlAttributeType ← parseOptionalPDLAttributeType then
