@@ -13,6 +13,7 @@ Read-only configuration for the tactic.
 meta structure PbvTranslateContext where
   /-- The bound up to which we want to bitblast our widths. -/
   bmcBound : Nat
+  blastWidth? : Option Nat := none
 
 meta def Expr.isNat (e : Expr) : Bool := e.isConstOf ``Nat
 
@@ -578,7 +579,11 @@ meta def pbvTranslate (g : MVarId) (ctx : PbvTranslateContext) : MetaM (List MVa
   -- Find `BitVec`s and intro their widths
   let (g, widthTms, bvsToRevert) ← visitExprRec g { env := widthEnv } {} (← g.getType)
   -- Compute the blast width
-  let blastWidth := widthTms.getUniverseWidthUpperBound ctx
+  let blastWidth :=
+    if let some blastWidth := ctx.blastWidth? then
+      blastWidth
+    else
+      widthTms.getUniverseWidthUpperBound ctx
   -- Introduce the width masks, bounded by the blast width
   let (g, widthInfos) ← introMaskWidths g widthTms blastWidth
   -- Find and translate conditions on the width vars
@@ -611,11 +616,17 @@ The tactic generates multiple goals:
 2. Multiple side-goals to prove that the width parameters are bounded by the
 computed blast width. These should be solvable by `grind`.
 -/
-syntax (name := pbvDecide) "pbv_decide" (ppSpace colGt num) : tactic
+syntax (name := pbvDecide) "pbv_decide" (ppSpace colGt num) (" at_width " colGt num)? : tactic
 
 @[tactic pbvDecide]
 public meta def evalPbvDecide : Tactic := fun stx => do
   match stx with
+  | `(tactic| pbv_decide $bound:num at_width $blastWidth:num) => do
+      let ctx : PbvTranslateContext := {
+        bmcBound := bound.getNat
+        blastWidth? := some blastWidth.getNat
+      }
+      replaceMainGoal (← pbvTranslate (← getMainGoal) ctx)
   | `(tactic| pbv_decide $n:num) => do
       let ctx : PbvTranslateContext := { bmcBound := n.getNat }
       replaceMainGoal (← pbvTranslate (← getMainGoal) ctx)
