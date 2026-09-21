@@ -56,7 +56,7 @@
           exArraySource = self + "/ExArray";
           exArrayBuildInputs = [
             pkgs.bash
-            (llvmPackages pkgs).clang
+            pkgs.clang
             pkgs.gmp
             pkgs.pkg-config
           ];
@@ -73,6 +73,7 @@
               rm lean-toolchain
               cp "${self}/lean-toolchain" lean-toolchain
               patchShebangs compiler
+              export CXX="${pkgs.clang}/bin/clang++"
             '';
           };
           ctrees = lake2nix.mkPackage {
@@ -123,6 +124,7 @@
             # together with LLVM's archiver.
             LEAN_AR = "${(llvmPackages pkgs).llvm}/bin/llvm-ar";
             LEAN_CC = "${self}/ExArray/compiler";
+            CXX = "${pkgs.clang}/bin/clang++";
           };
         });
 
