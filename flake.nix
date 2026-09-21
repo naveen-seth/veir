@@ -73,7 +73,7 @@
               rm lean-toolchain
               cp "${self}/lean-toolchain" lean-toolchain
               patchShebangs compiler
-              export CXX="${pkgs.clang}/bin/clang++"
+              export EXARRAY_CXX="${pkgs.clang}/bin/clang++"
             '';
           };
           ctrees = lake2nix.mkPackage {
@@ -124,7 +124,7 @@
             # together with LLVM's archiver.
             LEAN_AR = "${(llvmPackages pkgs).llvm}/bin/llvm-ar";
             LEAN_CC = "${self}/ExArray/compiler";
-            CXX = "${pkgs.clang}/bin/clang++";
+            EXARRAY_CXX = "${pkgs.clang}/bin/clang++";
           };
         });
 

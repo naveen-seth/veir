@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 P=$(lean --print-prefix)
-CXX="${CXX:-clang++}"
+CXX="${EXARRAY_CXX:-clang++}"
 GMP_INCLUDE=$(pkg-config --cflags-only-I gmp)
 OPT=-Wno-unused-command-line-argument
 
