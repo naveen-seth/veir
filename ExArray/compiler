@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 P=$(lean --print-prefix)
-CC=clang
+CC="$P/bin/clang"
 GMP_INCLUDE=$(pkg-config --cflags-only-I gmp)
 OPT=-Wno-unused-command-line-argument
 
