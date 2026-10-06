@@ -2,7 +2,6 @@ module
 
 public import Veir.Pass
 public import Veir.Passes.Legalization.LegalizerInfo
-public import Veir.Passes.Matching.GMIR.Basic
 import Veir.Passes.Legalization.Legalizer
 
 /-!
@@ -51,7 +50,5 @@ def LegalizeRISCV64Pass : Pass OpCode :=
     run := fun _ ctx _ _ => riscv64LegalizerInfo.legalize ctx }
 
 end
-
-
 
 end Veir

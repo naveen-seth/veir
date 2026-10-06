@@ -175,11 +175,7 @@ def lowerBinary (llvmOp : Llvm) (typeMatcher : IntegerType → Bool) (riscvOp : 
 /-- `llvm.add` (`i32`) -> `riscv.addw` (keeps the result sign-extended). -/
 def add32_pattern : Veir.Puddle.Pattern OpCode := lowerBinary .add (fun t => t.bitwidth == 32) .addw ()
 
-/--
-  Legalized `gmir.g_add` -> `riscv.add`. The legalizer widens every `g_add` to `i64` (see
-  `isLegalGAdd`), so only that width is selected: cast both operands to registers, apply
-  `riscv.add`, and cast the result back to the source type.
--/
+/-- Legal `gmir.g_add` -> `riscv.add`. -/
 def gAdd_pattern : Veir.Puddle.Pattern OpCode :=
   Veir.Puddle.Pattern.Builder
     (do
