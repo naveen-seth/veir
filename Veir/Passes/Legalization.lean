@@ -47,15 +47,18 @@ def expandIntegerExtOp (type : IntegerExtKind) : ((op : OpCode) × propertiesOf 
   | .any => .mk (OpCode.llvm .zext) (.mk false) -- FIXME
 
 /--
-  Widen the operands and result type of a homogeneously-typed binary LLVM operation.
+  Widen the operands and result type of a homogeneously-typed binary operation. The operands are
+  extended with `extOp` (by default the LLVM extension for `extType`) and the result is truncated
+  back with `truncOp` (by default `llvm.trunc`).
 -/
-def widenSimpleBinaryIntOp (ctx : WfIRContext OpCode) (op : OperationPtr) (newBw : Nat) (extType : IntegerExtKind) (newOp : Option OpWithProp := none) :
+def widenSimpleBinaryIntOp (ctx : WfIRContext OpCode) (op : OperationPtr) (newBw : Nat) (extType : IntegerExtKind) (newOp : Option OpWithProp := none)
+    (extOp : Option OpWithProp := none) (truncOp : OpWithProp := ⟨.llvm .trunc, .mk false false⟩) :
     Option (WfIRContext OpCode × Option (Array OperationPtr × Array ValuePtr)) := do
   let oldOp := Sigma.mk (op.getOpType! ctx.raw) (op.getProperties! ctx.raw (op.getOpType! ctx.raw))
   let .integerType ⟨bw, _⟩ := ((op.getResult 0).get! ctx.raw).type.val | return (ctx, none)
   if bw ≥ newBw then return (ctx, none)
-  let expandOp := expandIntegerExtOp extType
-  convertBinaryOp ctx op (IntegerType.signless newBw) expandOp expandOp (newOp.getD oldOp) ⟨.llvm .trunc, .mk false false⟩
+  let expandOp := extOp.getD (expandIntegerExtOp extType)
+  convertBinaryOp ctx op (IntegerType.signless newBw) expandOp expandOp (newOp.getD oldOp) truncOp
 
 /--
   Widen the operands and result type of an LLVM operation.
@@ -76,6 +79,12 @@ def widenOperations (ctx : WfIRContext OpCode) (op : OperationPtr) :
     widenSimpleBinaryIntOp ctx op 64 .any (some ⟨.llvm .xor, ()⟩)
   | .llvm .or =>
     widenSimpleBinaryIntOp ctx op 64 .any (some ⟨.llvm .or, .mk false⟩)
+  /- A `gmir.g_add` narrower than `i64` is not legal (see `isLegalGAdd`): any-extend the operands,
+     add on `i64`, and truncate back. The high bits are unconstrained, so the wide `g_add` does not
+     carry the original no-wrap flags. -/
+  | .gmir .g_add =>
+    widenSimpleBinaryIntOp ctx op 64 .any (some ⟨.gmir .g_add, ⟨false, false⟩⟩)
+      (extOp := some ⟨.gmir .g_anyext, ()⟩) (truncOp := ⟨.gmir .g_trunc, ⟨false, false⟩⟩)
   | _ => return (ctx, none)
 
 def LegalizePass.impl (ctx : WfIRContext OpCode) (op : OperationPtr) (_ : op.InBounds ctx.raw) :

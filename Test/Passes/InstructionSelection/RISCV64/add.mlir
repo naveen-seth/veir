@@ -1,4 +1,4 @@
-// RUN: veir-opt %s -p=llvm-to-gmir,isel-riscv64 | filecheck %s
+// RUN: veir-opt %s -p=llvm-to-gmir,legalize,isel-riscv64 | filecheck %s
 
 "builtin.module"() ({
     "func.func"()  <{function_type = (i64, i64) -> (), sym_name = "foo"}> ({
@@ -33,10 +33,13 @@
     "func.func"()  <{function_type = (i32, i32) -> (), sym_name = "bar"}> ({
     ^bb(%a: i32, %b: i32):
         %add = "llvm.add"(%a, %b) : (i32, i32) -> i32
-        // CHECK:      %{{.*}} = "builtin.unrealized_conversion_cast"(%{{.*}}) : (i32) -> !riscv.reg
-        // CHECK-NEXT: %{{.*}} = "builtin.unrealized_conversion_cast"(%{{.*}}) : (i32) -> !riscv.reg
-        // CHECK-NEXT: %{{.*}} = "riscv.addw"(%{{.*}}, %{{.*}}) : (!riscv.reg, !riscv.reg) -> !riscv.reg
-        // CHECK-NEXT: %{{.*}} = "builtin.unrealized_conversion_cast"(%{{.*}}) : (!riscv.reg) -> i32
+        // CHESK-NEXT: %{{.*}} = "gmir.g_anyext"(%{{.*}}) : (i32) -> i64
+        // CHESK-NEXT: %{{.*}} = "gmir.g_anyext"(%{{.*}}) : (i32) -> i64
+        // CHESK-NEXT: %{{.*}} = "builtin.unrealized_conversion_cast"(%{{.*}}) : (i64) -> !riscv.reg
+        // CHESK-NEXT: %{{.*}} = "builtin.unrealized_conversion_cast"(%{{.*}}) : (i64) -> !riscv.reg
+        // CHESK-NEXT: %{{.*}} = "riscv.add"(%{{.*}}, %{{.*}}) : (!riscv.reg, !riscv.reg) -> !riscv.reg
+        // CHESK-NEXT: %{{.*}} = "builtin.unrealized_conversion_cast"(%{{.*}}) : (!riscv.reg) -> i64
+        // CHESK-NEXT: %{{.*}} = "gmir.g_trunc"(%{{.*}}) : (i64) -> i32
         "test.test"(%add) : (i32) -> ()
         "func.return"() : () -> ()
     }) : () -> ()
