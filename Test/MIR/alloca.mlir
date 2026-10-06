@@ -1,4 +1,4 @@
-// RUN: veir-opt %s -p=riscv > %t
+// RUN: veir-opt %s -p=llvm-to-gmir,riscv > %t
 // RUN: veir2mir %t | filecheck %s
 
 // A stack cell holding two i64s. The argument is stored into both slots, both

@@ -1,4 +1,4 @@
-// RUN: veir-opt %s -p=riscv > %t
+// RUN: veir-opt %s -p=llvm-to-gmir,riscv > %t
 // RUN: veir2mir %t | filecheck %s
 
 // `llvm.call` and `llvm.return` go through the `riscv` pipeline to LLVM's call

@@ -7,6 +7,7 @@ import Veir.IR.SymbolRef
 import Veir.Interfaces.ConstantLikeInterfaces
 import Veir.Interfaces.FunctionInterfaces
 import Veir.Passes.Matching.LLVM.Basic
+import Veir.Passes.Matching.GMIR.Basic
 import Veir.Passes.InstructionSelection.Common
 import Veir.PatternRewriter.Puddle.Builders
 import Veir.PatternRewriter.Puddle.Execution
@@ -171,11 +172,42 @@ def lowerBinary (llvmOp : Llvm) (typeMatcher : IntegerType → Bool) (riscvOp : 
       return castBackOp)
     (fun castBackOp => castBackOp)
 
-/-- `llvm.add` (`i64`) -> `riscv.add`. -/
-def add64_pattern : Veir.Puddle.Pattern OpCode := lowerBinary .add (fun t => t.bitwidth == 64) .add ()
-
 /-- `llvm.add` (`i32`) -> `riscv.addw` (keeps the result sign-extended). -/
 def add32_pattern : Veir.Puddle.Pattern OpCode := lowerBinary .add (fun t => t.bitwidth == 32) .addw ()
+
+/--
+  Legalized `gmir.g_add` -> `riscv.add`. The legalizer widens every `g_add` to `i64` (see
+  `isLegalGAdd`), so only that width is selected: cast both operands to registers, apply
+  `riscv.add`, and cast the result back to the source type.
+-/
+def gAdd_pattern : Veir.Puddle.Pattern OpCode :=
+  Veir.Puddle.Pattern.Builder
+    (do
+      let lhsType ← Veir.Puddle.MatchProg.type (Attr := TypeAttr)
+      let rhsType ← Veir.Puddle.MatchProg.type (Attr := TypeAttr)
+      let resType ← Veir.Puddle.MatchProg.type (Attr := TypeAttr)
+      let lhs ← Veir.Puddle.MatchProg.value lhsType
+      let rhs ← Veir.Puddle.MatchProg.value rhsType
+      let _ ← Veir.Puddle.MatchProg.root (.gmir .g_add) #[lhs, rhs] #[resType]
+      Veir.Puddle.MatchProg.matchNative (lhsType, rhsType, resType)
+          fun (lhsType, rhsType, resType) => isLegalGAdd lhsType rhsType resType
+      return (resType, lhs, rhs))
+    (fun (resType, lhs, rhs) => do
+      let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
+      let lcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+      let lcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[lhs] #[regType] lcastProps
+      let rcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+      let rcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[rhs] #[regType] rcastProps
+      let addProps ← Veir.Puddle.CreateProg.property (.riscv .add) ()
+      let addOp ← Veir.Puddle.CreateProg.operation (.riscv .add)
+          #[lcastOp.res[0]!, rcastOp.res[0]!] #[regType] addProps
+      let castBackProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+      let castBackOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[addOp.res[0]!] #[resType] castBackProps
+      return castBackOp)
+    (fun castBackOp => castBackOp)
 
 /-- `llvm.sub` (`i64`) -> `riscv.sub`. -/
 def sub64_pattern : Veir.Puddle.Pattern OpCode := lowerBinary .sub (fun t => t.bitwidth == 64) .sub ()
@@ -451,8 +483,8 @@ def constant (rewriter : PatternRewriter OpCode) (op : OperationPtr)
     (opInBounds : op.InBounds rewriter.ctx.raw) : Option (PatternRewriter OpCode) :=
   RewritePattern.fromLocalRewrite constant_local rewriter op opInBounds
 
-/-- llvm.add -> riscv.add -/
-def add64 : Puddle.CompiledPattern OpCode := add64_pattern.compile
+/-- Legalized gmir.g_add -> riscv.add -/
+def gAdd : Puddle.CompiledPattern OpCode := gAdd_pattern.compile
 
 /-- llvm.add -> riscv.addw (riscv.addw for i32, keeps the result sign-extended) -/
 def add32 : Puddle.CompiledPattern OpCode := add32_pattern.compile
@@ -1855,7 +1887,7 @@ def ISelPass.impl (ctx : WfIRContext OpCode) (op : OperationPtr) (_ : op.InBound
   /- Main loop: the existing per-op lowerings. -/
   let pattern := RewritePattern.GreedyRewritePattern #[selectCzeroeqz, selectCzeronez, selectGeneral,
     ctlz32.run, ctlz64.run, cttz32.run, cttz64.run, ctpop32.run, ctpop64.run, bswap, bitreverse,
-    constant, addressof, add32.run, add64.run, and.run, ashr, icmp, or.run, xor32.run, xor64.run, mul32.run, mul64.run,
+    constant, addressof, add32.run, gAdd.run, and.run, ashr, icmp, or.run, xor32.run, xor64.run, mul32.run, mul64.run,
     sdiv32.run, sdiv64.run, udiv32.run, udiv64.run, srem32.run, srem64.run, urem32.run, urem64.run,
     sext32.run, sext16.run, sext8.run, zext32.run, zext16.run, zext8.run, trunc, shl, lshr,
     sub64.run, sub32.run, bitcast, load, getelementptr, store,
