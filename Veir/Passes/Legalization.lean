@@ -79,12 +79,6 @@ def widenOperations (ctx : WfIRContext OpCode) (op : OperationPtr) :
     widenSimpleBinaryIntOp ctx op 64 .any (some ⟨.llvm .xor, ()⟩)
   | .llvm .or =>
     widenSimpleBinaryIntOp ctx op 64 .any (some ⟨.llvm .or, .mk false⟩)
-  /- A `gmir.g_add` narrower than `i64` is not legal (see `isLegalGAdd`): any-extend the operands,
-     add on `i64`, and truncate back. The high bits are unconstrained, so the wide `g_add` does not
-     carry the original no-wrap flags. -/
-  | .gmir .g_add =>
-    widenSimpleBinaryIntOp ctx op 64 .any (some ⟨.gmir .g_add, ⟨false, false⟩⟩)
-      (extOp := some ⟨.gmir .g_anyext, ()⟩) (truncOp := ⟨.gmir .g_trunc, ⟨false, false⟩⟩)
   | _ => return (ctx, none)
 
 def LegalizePass.impl (ctx : WfIRContext OpCode) (op : OperationPtr) (_ : op.InBounds ctx.raw) :
