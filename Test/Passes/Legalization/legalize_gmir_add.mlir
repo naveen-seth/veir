@@ -1,4 +1,4 @@
-// RUN: veir-opt %s -p=legalize | filecheck %s
+// RUN: veir-opt %s -p=legalize-riscv64 | filecheck %s
 
 // A non-legal (narrower than `i64`) `gmir.g_add` is widened to a legal `i64` `g_add` with
 // `g_anyext` operands and a `g_trunc` result; a legal `i64` `g_add` is left alone.
