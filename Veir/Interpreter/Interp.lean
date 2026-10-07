@@ -90,8 +90,8 @@ theorem Interp.admissible_of_ub {α : Type} (P : Interp α → Prop) (hub : P (.
       exact this ▸ Lean.Order.PartialOrder.rel_refl
     rcases Interp.rel_iff.mp hbelow with heq | heq <;> exact heq ▸ hub
 
-@[simp, grind =] theorem Interp.pure_eq (a : α) : (pure a : Interp α) = .ok a := rfl
-@[simp, grind =] theorem Interp.bind_ok (a : α) (f : α → Interp β) :
+@[simp, grind =, veir_bv_normalize] theorem Interp.pure_eq (a : α) : (pure a : Interp α) = .ok a := rfl
+@[simp, grind =, veir_bv_normalize] theorem Interp.bind_ok (a : α) (f : α → Interp β) :
     (Interp.ok a >>= f) = f a := rfl
 @[simp, grind =] theorem Interp.bind_ub (f : α → Interp β) :
     ((.ub op : Interp α) >>= f) = .ub op := rfl
@@ -104,6 +104,18 @@ theorem Interp.admissible_of_ub {α : Type} (P : Interp α → Prop) (hub : P (.
       | .ok a => f a := rfl
 @[simp, grind =] theorem Interp.liftOption_none : ((none : Option α) : Interp α) = .fail none := rfl
 @[simp, grind =] theorem Interp.liftOption_some (a : α) : ((some a : Option α) : Interp α) = .ok a := rfl
+
+@[veir_bv_normalize] theorem Interp.bind_assoc {α β γ : Type} {x : Interp α} {f : α → Interp β}
+    {g : β → Interp γ} : x >>= f >>= g = x >>= fun a => f a >>= g := by
+  cases x <;> rfl
+
+@[veir_bv_normalize] theorem Interp.map_bind {α β γ : Type} {f : β → γ} {x : Interp α} {g : α → Interp β} :
+    (x >>= g).map f = x >>= fun a => (g a).map f := by
+  cases x <;> rfl
+
+@[veir_bv_normalize] theorem Interp.bind_eq_bind_iff {α β : Type} {x : Interp α} {f g : α → Interp β} :
+    (x >>= f) = (x >>= g) ↔ ∀ a, x = .ok a → f a = g a := by
+  cases x <;> simp [Interp.bind_def]
 
 /-- Binding is monotone, so a `partial_fixpoint` may recurse under `do` notation. -/
 instance : Lean.Order.MonoBind Interp where
