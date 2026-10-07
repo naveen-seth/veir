@@ -12,26 +12,20 @@ namespace Veir
 variable {OpCode : Type} [HasOpInfo OpCode] [HasDialect OpCode GMIR]
 
 /--
-Whether a `gmir.g_add` with operand types `lhs`, `rhs` and result type `res` is legal according
-to the rules of `info`.
+Whether a `gmir.g_add` whose type group 0 (both operands and the result) has type `type` is legal
+according to the rules of `info`.
 -/
-def isLegalGAdd (lhs rhs res : TypeAttr) (info : LegalizerInfo) : Bool :=
-  /- `g_add` has a single type group, shared by both operands and the result. -/
-  if lhs != rhs || lhs != res then false else
-  match LLT.ofType? lhs with
-  | none => false
-  | some type =>
-    let query : LegalityQuery := { opcode := .g_add, types := #[type] }
-    match (info.rules .g_add).findSome? (· query) |>.getD .unsupported with
-    | .legal => true
-    | _ => false
+def isLegalGAdd (type : TypeAttr) (info : LegalizerInfo) : Bool :=
+  /- `g_add` has a single type group, so the query has a single type. -/
+  (LLT.ofType? type).any fun llt =>
+    info.getActionFor { opcode := .g_add, types := #[llt] } matches .legal
 
 /-- Match a `gmir.g_add` whose types are legal. -/
-def matchLegalGAdd (op : OperationPtr) (ctx : IRContext OpCode) (info : LegalizerInfo) :
+def matchLegalGAdd (op : OperationPtr) (ctx : IRContext Veir.OpCode) (info : LegalizerInfo) :
     Option (ValuePtr × ValuePtr × propertiesOf GMIR.g_add) := do
   let (op', properties) ← matchOp op ctx GMIR.g_add 2
   let (lhs, rhs) := (op'[0]!, op'[1]!)
-  guard (isLegalGAdd (lhs.getType! ctx) (rhs.getType! ctx) ((op.getResult 0).get! ctx).type info)
+  guard (isLegalGAdd ((op.getResult 0).get! ctx).type info)
   return (lhs, rhs, properties)
 
 end Veir

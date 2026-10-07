@@ -134,13 +134,20 @@ structure LegalizerInfo where
   rules : GMIR → List LegalizeRule
 
 /--
+Determine what action should be taken for `query`, using the first rule of its opcode that applies.
+The operation is unsupported when no rule applies.
+-/
+def LegalizerInfo.getActionFor (info : LegalizerInfo) (query : LegalityQuery) : LegalizeAction :=
+  (info.rules query.opcode).findSome? (· query) |>.getD .unsupported
+
+/--
 Determine what action should be taken to legalize `op`, using the first rule of `opcode` that
 applies.
 -/
 def LegalizerInfo.getAction (info : LegalizerInfo) (ctx : IRContext OpCode) (op : OperationPtr)
     (opcode : GMIR) : LegalizeAction := Id.run do
   let some query := LegalityQuery.of? ctx op opcode | return .unsupported
-  return (info.rules opcode).findSome? (· query) |>.getD .unsupported
+  return info.getActionFor query
 
 end
 
