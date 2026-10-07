@@ -133,6 +133,35 @@ def zext16_pattern : Veir.Puddle.Pattern OpCode := lowerExt .zext 16 .zexth ()
 def zext32_pattern : Veir.Puddle.Pattern OpCode := lowerExt .zext 32 .zextw ()
 
 /--
+  Casts `lhs` and `rhs` to registers, optionally applies `extend` to each register first, applies
+  `riscvOp`, and casts the result back to `type`.
+-/
+def createBinary (riscvOp : Riscv) (riscvProps : propertiesOf (OpCode.riscv riscvOp))
+    (extend : Option (Σ extOp : Riscv, propertiesOf (OpCode.riscv extOp)))
+    (type : Veir.Puddle.Handle OpCode .type) (lhs rhs : Veir.Puddle.Handle OpCode .value) :
+    Veir.Puddle.CreateProg.Builder Veir.Puddle.CreatedOpHandle := do
+  let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
+  let lcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+  let lcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+      #[lhs] #[regType] lcastProps
+  let rcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+  let rcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+      #[rhs] #[regType] rcastProps
+  let (lval, rval) ← match extend with
+    | some ⟨extOp, extProps'⟩ => do
+      let extProps ← Veir.Puddle.CreateProg.property (.riscv extOp) extProps'
+      let lextOp ← Veir.Puddle.CreateProg.operation (.riscv extOp) #[lcastOp.res[0]!] #[regType] extProps
+      let rextOp ← Veir.Puddle.CreateProg.operation (.riscv extOp) #[rcastOp.res[0]!] #[regType] extProps
+      pure (lextOp.res[0]!, rextOp.res[0]!)
+    | none => pure (lcastOp.res[0]!, rcastOp.res[0]!)
+  let riscvOpProps ← Veir.Puddle.CreateProg.property (.riscv riscvOp) riscvProps
+  let riscvResOp ← Veir.Puddle.CreateProg.operation (.riscv riscvOp)
+      #[lval, rval] #[regType] riscvOpProps
+  let castBackProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+  Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+      #[riscvResOp.res[0]!] #[type] castBackProps
+
+/--
   RISC-V for binary operations that share a single integer type between both operands and the
   result: cast both operands to registers, optionally apply `extend` to each register first (e.g.
   `riscv.sextw` for the signed min/max `i32` arms, since `castToRegLocal`'s zero-extension does not
@@ -149,86 +178,71 @@ def lowerBinary (llvmOp : Llvm) (typeMatcher : IntegerType → Bool) (riscvOp : 
       let rhs ← Veir.Puddle.MatchProg.value opType
       let _ ← Veir.Puddle.MatchProg.root (.llvm llvmOp) #[lhs, rhs] #[opType]
       return (opType, lhs, rhs))
-    (fun (opType, lhs, rhs) => do
-      let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
-      let lcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let lcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[lhs] #[regType] lcastProps
-      let rcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let rcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[rhs] #[regType] rcastProps
-      let (lval, rval) ← match extend with
-        | some ⟨extOp, extProps'⟩ => do
-          let extProps ← Veir.Puddle.CreateProg.property (.riscv extOp) extProps'
-          let lextOp ← Veir.Puddle.CreateProg.operation (.riscv extOp) #[lcastOp.res[0]!] #[regType] extProps
-          let rextOp ← Veir.Puddle.CreateProg.operation (.riscv extOp) #[rcastOp.res[0]!] #[regType] extProps
-          pure (lextOp.res[0]!, rextOp.res[0]!)
-        | none => pure (lcastOp.res[0]!, rcastOp.res[0]!)
-      let riscvOpProps ← Veir.Puddle.CreateProg.property (.riscv riscvOp) riscvProps
-      let riscvResOp ← Veir.Puddle.CreateProg.operation (.riscv riscvOp)
-          #[lval, rval] #[regType] riscvOpProps
-      let castBackProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let castBackOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[riscvResOp.res[0]!] #[opType] castBackProps
-      return castBackOp)
+    (fun (opType, lhs, rhs) => createBinary riscvOp riscvProps extend opType lhs rhs)
     (fun castBackOp => castBackOp)
 
-/--
-  Legalized `i32` add -> `riscv.addw` (keeps the result sign-extended). The legalizer widens an
-  `i32` `gmir.g_add` to `g_trunc (g_add (g_anyext lhs) (g_anyext rhs))` on `i64`; since `addw`
-  only reads the low 32 bits of its operands and the `g_trunc` only keeps the low 32 bits of the
-  sum, the whole sequence is selected to a single `riscv.addw` on the original operands.
--/
-def add32_pattern : Veir.Puddle.Pattern OpCode :=
+/-- A `gmir` binary operation that is legal for `riscv64LegalizerInfo` -> `riscvOp`. -/
+def lowerLegalBinop (opcode : GMIR) (riscvOp : Riscv)
+    (riscvProps : propertiesOf (OpCode.riscv riscvOp)) : Veir.Puddle.Pattern OpCode :=
   Veir.Puddle.Pattern.Builder
-    (do
-      let narrowType ← Veir.Puddle.MatchProg.type (Attr := IntegerType) (fun t => t.bitwidth == 32)
-      let wideType ← Veir.Puddle.MatchProg.type (Attr := IntegerType) (fun t => t.bitwidth == 64)
-      let lhs ← Veir.Puddle.MatchProg.value narrowType
-      let rhs ← Veir.Puddle.MatchProg.value narrowType
-      let lextOp ← Veir.Puddle.MatchProg.operation (.gmir .g_anyext) #[lhs] #[wideType]
-      let rextOp ← Veir.Puddle.MatchProg.operation (.gmir .g_anyext) #[rhs] #[wideType]
-      let addOp ← Veir.Puddle.MatchProg.operation (.gmir .g_add)
-          #[lextOp.res[0]!, rextOp.res[0]!] #[wideType]
-      let _ ← Veir.Puddle.MatchProg.root (.gmir .g_trunc) #[addOp.res[0]!] #[narrowType]
-      return (narrowType, lhs, rhs))
-    (fun (narrowType, lhs, rhs) => do
-      let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
-      let lcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let lcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[lhs] #[regType] lcastProps
-      let rcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let rcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[rhs] #[regType] rcastProps
-      let addwProps ← Veir.Puddle.CreateProg.property (.riscv .addw) ()
-      let addwOp ← Veir.Puddle.CreateProg.operation (.riscv .addw)
-          #[lcastOp.res[0]!, rcastOp.res[0]!] #[regType] addwProps
-      let castBackProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let castBackOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[addwOp.res[0]!] #[narrowType] castBackProps
-      return castBackOp)
+    (matchLegalBinop riscv64LegalizerInfo opcode)
+    (fun (type, lhs, rhs) => createBinary riscvOp riscvProps none type lhs rhs)
     (fun castBackOp => castBackOp)
 
 /-- Legal `gmir.g_add` -> `riscv.add`. -/
-def gAdd_pattern : Veir.Puddle.Pattern OpCode :=
+def gAdd_pattern : Veir.Puddle.Pattern OpCode := lowerLegalBinop .g_add .add ()
+
+/-- Legal `gmir.g_sub` -> `riscv.sub`. -/
+def gSub_pattern : Veir.Puddle.Pattern OpCode := lowerLegalBinop .g_sub .sub ()
+
+/--
+Legal `gmir.g_sext_inreg` with size `sz` -> `riscvOp`, the sign extension from the low `sz` bits.
+-/
+def lowerSextInReg (sz : Nat) (riscvOp : Riscv) (riscvProps : propertiesOf (OpCode.riscv riscvOp)) :
+    Veir.Puddle.Pattern OpCode :=
   Veir.Puddle.Pattern.Builder
-    /- Only select a `g_add` that `riscv64LegalizerInfo` considers legal. -/
-    (matchLegalGAdd riscv64LegalizerInfo)
-    (fun (resType, lhs, rhs) => do
+    (do
+      let type ← Veir.Puddle.MatchProg.type (Attr := TypeAttr)
+      let x ← Veir.Puddle.MatchProg.value type
+      let root ← Veir.Puddle.MatchProg.root (.gmir .g_sext_inreg) #[x] #[type] (·.sz == sz)
+      Veir.Puddle.MatchProg.matchNative (root.properties, type) fun (props, type) =>
+        riscv64LegalizerInfo.isLegal .g_sext_inreg props #[type] #[type]
+      return (type, x))
+    (fun (type, x) => do
       let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
-      let lcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let lcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[lhs] #[regType] lcastProps
-      let rcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let rcastOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[rhs] #[regType] rcastProps
-      let addProps ← Veir.Puddle.CreateProg.property (.riscv .add) ()
-      let addOp ← Veir.Puddle.CreateProg.operation (.riscv .add)
-          #[lcastOp.res[0]!, rcastOp.res[0]!] #[regType] addProps
+      let castProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+      let castOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[x] #[regType] castProps
+      let riscvOpProps ← Veir.Puddle.CreateProg.property (.riscv riscvOp) riscvProps
+      let riscvResOp ← Veir.Puddle.CreateProg.operation (.riscv riscvOp)
+          #[castOp.res[0]!] #[regType] riscvOpProps
       let castBackProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
-      let castBackOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
-          #[addOp.res[0]!] #[resType] castBackProps
-      return castBackOp)
+      Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[riscvResOp.res[0]!] #[type] castBackProps)
+    (fun castBackOp => castBackOp)
+
+/--
+Legal `gmir.g_trunc` and `gmir.g_anyext` (`opcode`) between integers of at most 64 bits -> a round
+trip through a register, as for `llvm.trunc` (see `trunc_local`). This is LLVM's `selectCopy`. An
+`i32` is zero-extended in a register, which is a valid choice for the high bits of `g_anyext`.
+-/
+def lowerCopy (opcode : GMIR) : Veir.Puddle.Pattern OpCode :=
+  Veir.Puddle.Pattern.Builder
+    (do
+      let opType ← Veir.Puddle.MatchProg.type (Attr := IntegerType) (·.bitwidth ≤ 64)
+      let resType ← Veir.Puddle.MatchProg.type (Attr := IntegerType) (·.bitwidth ≤ 64)
+      let x ← Veir.Puddle.MatchProg.value opType
+      let root ← Veir.Puddle.MatchProg.root (.gmir opcode) #[x] #[resType]
+      Veir.Puddle.MatchProg.matchNative (root.properties, resType, opType)
+        fun (props, resType, opType) => riscv64LegalizerInfo.isLegal opcode props #[resType] #[opType]
+      return (resType, x))
+    (fun (resType, x) => do
+      let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
+      let castProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
+      let castOp ← Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[x] #[regType] castProps
+      Veir.Puddle.CreateProg.operation (.builtin .unrealized_conversion_cast)
+          #[castOp.res[0]!] #[resType] castProps)
     (fun castBackOp => castBackOp)
 
 /-- `llvm.sub` (`i64`) -> `riscv.sub`. -/
@@ -505,11 +519,26 @@ def constant (rewriter : PatternRewriter OpCode) (op : OperationPtr)
     (opInBounds : op.InBounds rewriter.ctx.raw) : Option (PatternRewriter OpCode) :=
   RewritePattern.fromLocalRewrite constant_local rewriter op opInBounds
 
-/-- Legalized gmir.g_add -> riscv.add -/
+/-- gmir.g_add -> riscv.add -/
 def gAdd : Puddle.CompiledPattern OpCode := gAdd_pattern.compile
 
-/-- Legalized i32 add (`g_trunc (g_add (g_anyext _) (g_anyext _))`) -> riscv.addw -/
-def add32 : Puddle.CompiledPattern OpCode := add32_pattern.compile
+/-- gmir.g_sub -> riscv.sub -/
+def gSub : Puddle.CompiledPattern OpCode := gSub_pattern.compile
+
+/-- gmir.g_sext_inreg (32) -> riscv.sextw -/
+def gSextInReg32 : Puddle.CompiledPattern OpCode := (lowerSextInReg 32 .sextw ()).compile
+
+/-- gmir.g_sext_inreg (16) -> riscv.sexth -/
+def gSextInReg16 : Puddle.CompiledPattern OpCode := (lowerSextInReg 16 .sexth ()).compile
+
+/-- gmir.g_sext_inreg (8) -> riscv.sextb -/
+def gSextInReg8 : Puddle.CompiledPattern OpCode := (lowerSextInReg 8 .sextb ()).compile
+
+/-- gmir.g_trunc -> register round trip -/
+def gTrunc : Puddle.CompiledPattern OpCode := (lowerCopy .g_trunc).compile
+
+/-- gmir.g_anyext -> register round trip -/
+def gAnyExt : Puddle.CompiledPattern OpCode := (lowerCopy .g_anyext).compile
 
 /-- llvm.and -> riscv.and (bitwise, so one instruction for every legal width) -/
 def and : Puddle.CompiledPattern OpCode := and_pattern.compile
@@ -1909,7 +1938,8 @@ def ISelPass.impl (ctx : WfIRContext OpCode) (op : OperationPtr) (_ : op.InBound
   /- Main loop: the existing per-op lowerings. -/
   let pattern := RewritePattern.GreedyRewritePattern #[selectCzeroeqz, selectCzeronez, selectGeneral,
     ctlz32.run, ctlz64.run, cttz32.run, cttz64.run, ctpop32.run, ctpop64.run, bswap, bitreverse,
-    constant, addressof, add32.run, gAdd.run, and.run, ashr, icmp, or.run, xor32.run, xor64.run, mul32.run, mul64.run,
+    constant, addressof, gAdd.run, gSub.run, gSextInReg32.run, gSextInReg16.run,
+    gSextInReg8.run, gTrunc.run, gAnyExt.run, and.run, ashr, icmp, or.run, xor32.run, xor64.run, mul32.run, mul64.run,
     sdiv32.run, sdiv64.run, udiv32.run, udiv64.run, srem32.run, srem64.run, urem32.run, urem64.run,
     sext32.run, sext16.run, sext8.run, zext32.run, zext16.run, zext8.run, trunc, shl, lshr,
     sub64.run, sub32.run, bitcast, load, getelementptr, store,

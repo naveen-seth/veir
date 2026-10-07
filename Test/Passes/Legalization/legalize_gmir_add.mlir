@@ -1,7 +1,7 @@
 // RUN: veir-opt %s -p=legalize-riscv64 | filecheck %s
 
-// A non-legal (narrower than `i64`) `gmir.g_add` is widened to a legal `i64` `g_add` with
-// `g_anyext` operands and a `g_trunc` result; a legal `i64` `g_add` is left alone.
+// An `i32` `gmir.g_add` is widened to a legal `i64` `g_add` with `g_anyext` operands, whose result
+// is sign-extended from bit 31 and truncated back; a legal `i64` `g_add` is left alone.
 
 "builtin.module"() ({
   "func.func"() <{function_type = (i32, i32, i64, i64) -> (), sym_name = "foo"}> ({
@@ -10,7 +10,8 @@
     // CHECK:      %[[A:.*]] = "gmir.g_anyext"(%{{.*}}) : (i32) -> i64
     // CHECK-NEXT: %[[B:.*]] = "gmir.g_anyext"(%{{.*}}) : (i32) -> i64
     // CHECK-NEXT: %[[ADD:.*]] = "gmir.g_add"(%[[A]], %[[B]]) : (i64, i64) -> i64
-    // CHECK-NEXT: %{{.*}} = "gmir.g_trunc"(%[[ADD]]) : (i64) -> i32
+    // CHECK-NEXT: %[[SEXT:.*]] = "gmir.g_sext_inreg"(%[[ADD]]) <{"sz" = 32 : i64}> : (i64) -> i64
+    // CHECK-NEXT: %{{.*}} = "gmir.g_trunc"(%[[SEXT]]) : (i64) -> i32
     %1 = "gmir.g_add"(%c, %d) : (i64, i64) -> i64
     // CHECK-NEXT: %{{.*}} = "gmir.g_add"(%{{.*}}, %{{.*}}) : (i64, i64) -> i64
     // CHECK-NOT:  "gmir.g_anyext"

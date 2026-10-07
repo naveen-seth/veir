@@ -1683,6 +1683,34 @@ def sextw_roriw := sextw_signExtendingOpW .roriw 1
 def sextw_packw := sextw_signExtendingOpW .packw 2
 def sextw_lui := sextw_signExtendingOpW .lui 0
 
+/-- `riscv.sextw (op x, y) -> wOp x, y`, where `wOp` is the word version of `op`.
+
+    LLVM: `RISCVOptWInstrs::removeSExtWInstrs` turns the definition of the input of a `sext.w`
+    into its word version (`getWOp`) and deletes the `sext.w`. Unlike LLVM, `op` is kept for
+    its other users.
+    https://github.com/llvm/llvm-project/blob/ca7933e47d3a3451d81e72ac174dcb5aa28b59d1/llvm/lib/Target/RISCV/RISCVOptWInstrs.cpp#L701-L751 -/
+def sextw_toWOp_pattern (op wOp : Riscv) (wProps : propertiesOf (OpCode.riscv wOp)) :
+    Puddle.Pattern OpCode :=
+  Puddle.Pattern.Builder
+    (do
+      let regType ← Puddle.MatchProg.type (Attr := RegisterType)
+      let lhs ← Puddle.MatchProg.value regType
+      let rhs ← Puddle.MatchProg.value regType
+      let inner ← Puddle.MatchProg.operation (.riscv op) #[lhs, rhs] #[regType]
+      let _ ← Puddle.MatchProg.root (.riscv .sextw) #[inner.res[0]!] #[regType]
+      return (regType, lhs, rhs))
+    (fun (regType, lhs, rhs) => do
+      let props ← Puddle.CreateProg.property (.riscv wOp) wProps
+      Puddle.CreateProg.operation (.riscv wOp) #[lhs, rhs] #[regType] props)
+    (fun wide => wide)
+
+def sextw_toWOp (op wOp : Riscv) (wProps : propertiesOf (OpCode.riscv wOp)) :
+    RewritePattern OpCode :=
+  (sextw_toWOp_pattern op wOp wProps).compile.run
+
+def sextw_add := sextw_toWOp .add .addw ()
+def sextw_sub := sextw_toWOp .sub .subw ()
+
 /-- Counts. `cpop`, `clz` and `ctz` and their word versions return at most 64, whose
     upper bits are all zero.
 
@@ -2946,6 +2974,8 @@ def Combine.impl (ctx : WfIRContext OpCode) (op : OperationPtr) (_ : op.InBounds
      , sextw_lhu
      , sextw_lbu
      , sextw_addw
+     , sextw_add
+     , sextw_sub
      , sextw_addiw
      , sextw_subw
      , sextw_mulw

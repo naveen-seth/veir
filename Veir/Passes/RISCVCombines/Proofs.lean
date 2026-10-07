@@ -439,6 +439,15 @@ theorem sextw_packh {rs1 rs2 : Reg} :
 theorem sextw_addw {rs1 rs2 : Reg} : RISCV.sextw (RISCV.addw rs2 rs1) = RISCV.addw rs2 rs1 :=
   sextw_signExtend
 
+/-! Prove the correctness of `riscv.sextw (riscv.add x, y) -> riscv.addw x, y` and of the same
+    combine for `sub`: the word version computes the low word and sign-extends it. -/
+
+theorem sextw_add {rs1 rs2 : Reg} : RISCV.sextw (RISCV.add rs2 rs1) = RISCV.addw rs2 rs1 := by
+  veir_bv_decide
+
+theorem sextw_sub {rs1 rs2 : Reg} : RISCV.sextw (RISCV.sub rs2 rs1) = RISCV.subw rs2 rs1 := by
+  veir_bv_decide
+
 theorem sextw_addiw {rs1 : Reg} {imm : BitVec 12} :
     RISCV.sextw (RISCV.addiw imm rs1) = RISCV.addiw imm rs1 :=
   sextw_signExtend

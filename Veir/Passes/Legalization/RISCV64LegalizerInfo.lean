@@ -3,6 +3,8 @@ module
 public import Veir.Pass
 public import Veir.Passes.Legalization.LegalizerInfo
 import Veir.Passes.Legalization.Legalizer
+import Veir.Passes.Legalization.LegalizerHelper
+import Veir.PatternRewriter.Puddle.Builders
 
 /-!
 # RISC-V 64 Legalization
@@ -15,13 +17,39 @@ https://github.com/llvm/llvm-project/blob/main/llvm/lib/Target/RISCV/GISel/RISCV
 
 namespace Veir
 
+open Puddle in
+/--
+Computes an `i32` binary `opcode` operation on `i64` and sign-extends the result from bit 31, so
+that instruction selection can pick the word instruction (`addw`, `subw`). This is the custom
+legalization of `G_ADD` and `G_SUB` in LLVM's `RISCVLegalizerInfo`, and is called
+`customLegalizeToWOpWithSExt` in LLVM's `RISCVISelLowering`.
+-/
+def customLegalizeToWOpWithSExt (opcode : GMIR) (noFlags : propertiesOf (OpCode.gmir opcode)) :
+    Pattern OpCode :=
+  Pattern.Builder (matchBinop opcode)
+    (fun (type, lhs, rhs) => do
+      let wideType ← CreateProg.type (IntegerType.signless 64)
+      let wideLhs ← widenScalarSrc .g_anyext () wideType lhs
+      let wideRhs ← widenScalarSrc .g_anyext () wideType rhs
+      let props ← CreateProg.property (.gmir opcode) noFlags
+      let wide ← CreateProg.operation (.gmir opcode) #[wideLhs, wideRhs] #[wideType] props
+      let sextProps ← CreateProg.property (.gmir .g_sext_inreg) ⟨32⟩
+      let sext ← CreateProg.operation (.gmir .g_sext_inreg) #[wide.res[0]!] #[wideType] sextProps
+      widenScalarDst sext.res[0]! type)
+    (fun trunc => trunc)
+
 public section
 
--- TODO: Add custom rules which help select the word variants of operations.
 def riscv64LegalizerInfo : LegalizerInfo where
   rules
-    | .g_add | .g_sub => [
+    | .g_add => [
       .legalFor [64],
+      .customFor [32] (customLegalizeToWOpWithSExt .g_add ⟨false, false⟩),
+      .minScalar (.type 0) 64,
+    ]
+    | .g_sub => [
+      .legalFor [64],
+      .customFor [32] (customLegalizeToWOpWithSExt .g_sub ⟨false, false⟩),
       .minScalar (.type 0) 64,
     ]
     | .g_icmp => [
@@ -42,6 +70,10 @@ def riscv64LegalizerInfo : LegalizerInfo where
     ]
     | .g_trunc => [
       .alwaysLegal,
+    ]
+    | .g_sext_inreg => [
+      -- `sz` 8 and 16 need Zbb, which VeIR assumes since it selects `sext.b` and `sext.h`.
+      .legalIf fun query => query.getLLT! (.type 0) == 64 && [8, 16, 32].contains (query.getImm! 0),
     ]
 
 def LegalizeRISCV64Pass : Pass OpCode :=

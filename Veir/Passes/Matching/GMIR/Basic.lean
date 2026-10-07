@@ -10,16 +10,17 @@ public section
 namespace Veir
 
 /--
-Puddle matcher for a legal `GMIR.g_add`  according to `info`.
+Puddle matcher for a binary `opcode` operation (`g_add`, `g_sub`) that is legal according to `info`.
 -/
-def matchLegalGAdd (info : LegalizerInfo) :
+def matchLegalBinop (info : LegalizerInfo) (opcode : GMIR) :
     Puddle.MatchProg.Builder
       (Puddle.Handle OpCode .type × Puddle.Handle OpCode .value × Puddle.Handle OpCode .value) := do
   let type ← Puddle.MatchProg.type (Attr := TypeAttr)
   let lhs ← Puddle.MatchProg.value type
   let rhs ← Puddle.MatchProg.value type
-  let _ ← Puddle.MatchProg.root (.gmir .g_add) #[lhs, rhs] #[type]
-  Puddle.MatchProg.matchNative type fun type => info.isLegal .g_add #[type]
+  let root ← Puddle.MatchProg.root (.gmir opcode) #[lhs, rhs] #[type]
+  Puddle.MatchProg.matchNative (root.properties, type) fun (props, type) =>
+    info.isLegal opcode props #[type] #[type, type]
   return (type, lhs, rhs)
 
 end Veir
