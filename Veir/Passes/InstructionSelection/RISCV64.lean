@@ -9,6 +9,7 @@ import Veir.Interfaces.FunctionInterfaces
 import Veir.Passes.Matching.LLVM.Basic
 import Veir.Passes.Matching.GMIR.Basic
 import Veir.Passes.InstructionSelection.Common
+import Veir.Passes.Legalization.RISCV64LegalizerInfo
 import Veir.PatternRewriter.Puddle.Builders
 import Veir.PatternRewriter.Puddle.Execution
 
@@ -219,7 +220,7 @@ def gAdd_pattern : Veir.Puddle.Pattern OpCode :=
       let rhs ← Veir.Puddle.MatchProg.value rhsType
       let _ ← Veir.Puddle.MatchProg.root (.gmir .g_add) #[lhs, rhs] #[resType]
       Veir.Puddle.MatchProg.matchNative (lhsType, rhsType, resType)
-          fun (lhsType, rhsType, resType) => isLegalGAdd lhsType rhsType resType
+          fun (lhsType, rhsType, resType) => isLegalGAdd lhsType rhsType resType riscv64LegalizerInfo
       return (resType, lhs, rhs))
     (fun (resType, lhs, rhs) => do
       let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
