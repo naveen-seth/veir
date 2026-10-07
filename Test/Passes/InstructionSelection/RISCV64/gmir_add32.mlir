@@ -1,4 +1,4 @@
-// RUN: veir-opt %s -p=legalize-riscv64,isel-riscv64 | filecheck %s
+// RUN: veir-opt %s -p=legalizeisel-riscv64 | filecheck %s
 
 // An `i32` `gmir.g_add` is legalized to `g_trunc (g_add (g_anyext a) (g_anyext b))` on `i64`,
 // which is selected as a whole to a single `riscv.addw` on the original operands.
