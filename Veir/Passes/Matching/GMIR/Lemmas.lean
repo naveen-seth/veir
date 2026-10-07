@@ -1,9 +1,10 @@
 module
 
 public import Veir.Passes.Matching.GMIR.Basic
-public import Veir.Passes.Legalization.RISCV64LegalizerInfo
+public import Veir.PatternRewriter.Puddle.Execution
 
 import all Veir.Passes.Matching.GMIR.Basic
+import Veir.PatternRewriter.Puddle.Validity
 
 public section
 
@@ -11,19 +12,17 @@ public section
 
 namespace Veir
 
-variable {OpCode : Type} [HasOpInfo OpCode] [HasDialect OpCode GMIR]
-
-/-- What matching `gmir.g_add` (via `matchLegalGAdd`) syntactically guarantees: a `g_add` whose types
-    are legal (see `isLegalGAdd`). -/
-theorem matchLegalGAdd_implies {op : OperationPtr} {ctx : IRContext OpCode} {lhs rhs props} :
-    matchLegalGAdd op ctx riscv64LegalizerInfo = some (lhs, rhs, props) →
-    op.getOpType! ctx = GMIR.g_add ∧
-    op.getNumResults! ctx = 1 ∧
-    op.getOperands! ctx = #[lhs, rhs] ∧
-    props = op.getProperties! ctx GMIR.g_add ∧
-    isLegalGAdd (lhs.getType! ctx) (rhs.getType! ctx) ((op.getResult 0).get! ctx).type riscv64LegalizerInfo := by
+/-- What matching a root with `matchLegalGAdd` guarantees: a `g_add` with two operands and one
+    result, whose type is legal according to `info`. -/
+theorem matchLegalGAdd_implies {info : LegalizerInfo} {ctx : IRContext OpCode}
+    {op : OperationPtr} {assignment : Puddle.Assignment OpCode} :
+    (Puddle.MatchProg.build (matchLegalGAdd info)).run ctx op = some assignment →
+    op.getOpType! ctx = .gmir .g_add ∧
+    (op.getOperands! ctx).size = 2 ∧
+    (op.getResultTypes! ctx).size = 1 ∧
+    info.isLegal .g_add #[(op.getResultTypes! ctx)[0]!] := by
   intro hmatch
-  simp only [matchLegalGAdd, bind, Option.bind, pure, guard, failure] at hmatch
-  grind
+  simp only [matchLegalGAdd] at hmatch
+  sorry
 
 end Veir

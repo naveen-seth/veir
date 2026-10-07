@@ -212,15 +212,8 @@ def add32_pattern : Veir.Puddle.Pattern OpCode :=
 /-- Legal `gmir.g_add` -> `riscv.add`. -/
 def gAdd_pattern : Veir.Puddle.Pattern OpCode :=
   Veir.Puddle.Pattern.Builder
-    (do
-      /- `g_add` has a single type group, shared by both operands and the result. -/
-      let resType ← Veir.Puddle.MatchProg.type (Attr := TypeAttr)
-      let lhs ← Veir.Puddle.MatchProg.value resType
-      let rhs ← Veir.Puddle.MatchProg.value resType
-      let _ ← Veir.Puddle.MatchProg.root (.gmir .g_add) #[lhs, rhs] #[resType]
-      /- Only select a `g_add` that `riscv64LegalizerInfo` considers legal. -/
-      Veir.Puddle.MatchProg.matchNative resType fun type => isLegalGAdd type riscv64LegalizerInfo
-      return (resType, lhs, rhs))
+    /- Only select a `g_add` that `riscv64LegalizerInfo` considers legal. -/
+    (matchLegalGAdd riscv64LegalizerInfo)
     (fun (resType, lhs, rhs) => do
       let regType ← Veir.Puddle.CreateProg.type (RegisterType.mk none)
       let lcastProps ← Veir.Puddle.CreateProg.property (.builtin .unrealized_conversion_cast) ()
